@@ -255,13 +255,13 @@ class CSVEditor(App):
     message_delay = 3
     
     
-    def __init__(self, delimiter: str = ",", *args, **kwargs):
+    def __init__(self, delimiter: str = ",", filename: str = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.delimiter = delimiter
         self.changed = False
         self.dark = True
-        # Initialize undo manager later (after table is created)
         self.undo_manager = None
+        self.filename = filename  # Store filename passed from command line
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="Cell editor / prompt", id="cell_input")
@@ -285,15 +285,17 @@ class CSVEditor(App):
         self.update_status_with_coords()
         
         if len(sys.argv) > 1:
-            path = Path(sys.argv[1])
+            path = Path(sys.argv[1]).expanduser().resolve()
             if path.exists():
                 self.load_csv(path)
-                # Add delimiter info to status
-                self.set_status(f"Loaded: {path} | Delimiter: '{self.delimiter}'", temporary=True)
+                self.set_status(
+                    f"Loaded: {path} | Delimiter: '{self.delimiter}'",
+                    temporary=True
+                )
             else:
                 self.set_status(f"File not found: {path}")
-                
-        if not self.current_file:
+                self.create_new_file()
+        else:
             self.create_new_file()
 
     # def set_theme(self, theme_name: str) -> None:
@@ -2644,11 +2646,6 @@ if __name__ == "__main__":
     # Get filename from args
     filename = args.file
     
-    # Pass delimiter to CSVEditor
-    app = CSVEditor(delimiter=delimiter)
-    
-    # Pass filename as argument if provided
-    if filename:
-        sys.argv = [sys.argv[0], filename]
-    
+    # Pass delimiter and filename to CSVEditor
+    app = CSVEditor(delimiter=delimiter, filename=filename)
     app.run()
