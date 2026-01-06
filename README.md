@@ -23,7 +23,7 @@ A CSV editor for the terminal, with minimal spread sheet capabilities.
 
 Clone repository:
 
-`git clone https://github.com/xqtr/termcell
+`git clone https://github.com/xqtr/termcell`
 
 Change directory:
 `cd termcell`
