@@ -149,16 +149,16 @@ def get_cellvalue_by_index(datatable, row_idx, col_idx):
         # Get row key from index
         row_keys = list(datatable.rows.keys())
         if row_idx < 0 or row_idx >= len(row_keys):
-            return None
+            return "#INVROW"
         
         # Get column key from index
         col_keys = list(datatable.columns.keys())
         if col_idx < 0 or col_idx >= len(col_keys):
-            return None
+            return "#INVCOL"
         
         return datatable.get_cell(row_keys[row_idx], col_keys[col_idx])
     except (KeyError, IndexError, AttributeError):
-        return None
+        return "#ERROR"
 
 def list_cell_references(text):
     """

@@ -283,6 +283,213 @@ Examples:
 termcell --delimiter=";" data.csv
 termcell --tab data.tsv
 ```
+
+---
+
+
+# Math Expression Syntax
+
+Below described the **supported syntax** for the AST-based math
+expression evaluator. 
+
+The evaluator implements a **strict mathematical expression language**.
+Anything outside this language is rejected.
+
+---
+
+To enter a mathematical expression in a cell, use this syntax:
+
+`=(expression)`
+
+For the program to recognize the string as a math.expression to calculate,
+it must start with `=(` and end with `)`. Inside you can input any of the
+functions mentioned below, as well cell references like `$A10` or program
+variables.
+
+### Examples
+
+`=($A1 + $A2 + $A3)`
+`=(sin($B1)*pi)`
+
+---
+
+## Overview
+
+The expression parser supports:
+
+- Numeric literals (integers and floats)
+- Mathematical operators
+- Parentheses for grouping
+- A curated set of mathematical functions
+- A curated set of mathematical constants
+- Power operator using `^` (instead of Python’s `**`)
+
+It **does not** support:
+
+- Variables (e.g. `x`, `y`)
+- Attribute access (e.g. `obj.attr`)
+- Indexing (e.g. `a[0]`)
+- Assignments
+- Imports or any Python-specific syntax
+
+---
+
+## Numbers
+
+Both integers and floating-point numbers are supported.
+
+Examples:
+
+```text
+42
+3.14159
+0.5
+-12
+```
+
+Scientific notation is supported if Python accepts it:
+
+```text
+1e3
+2.5e-4
+```
+
+---
+
+## Operators
+
+The following operators are supported:
+
+| Operator | Description |
+|--------|-------------|
+| `+` | Addition |
+| `-` | Subtraction |
+| `*` | Multiplication |
+| `/` | Division |
+| `%` | Modulo |
+| `^` | Power |
+
+> **Note**: `^` is interpreted as exponentiation, not bitwise XOR.
+
+Operator precedence follows standard mathematical rules.
+
+---
+
+## Parentheses
+
+Parentheses can be used freely to group expressions.
+
+Example:
+
+```text
+(3 + 2) * (4 + 1)
+```
+
+---
+
+## Supported Functions
+
+Only the following functions are available. Function names are **case-sensitive**.
+
+### Trigonometric
+
+- `sin(x)`
+- `cos(x)`
+- `tan(x)`
+- `asin(x)`
+- `acos(x)`
+- `atan(x)`
+- `sinh(x)`
+- `cosh(x)`
+- `tanh(x)`
+
+(All angles are in **radians**.)
+
+### Logarithmic & Exponential
+
+- `log(x)` (natural logarithm)
+- `ln(x)` (alias for natural logarithm)
+- `log10(x)`
+- `exp(x)`
+- `sqrt(x)`
+- `pow(x, y)`
+
+### Miscellaneous
+
+- `abs(x)`
+- `floor(x)`
+- `ceil(x)`
+- `round(x [, ndigits])`
+
+---
+
+## Supported Constants
+
+The following constants are predefined:
+
+| Name | Description |
+|----|-------------|
+| `pi` | π |
+| `e` | Euler’s number |
+| `tau` | 2π |
+| `inf` | Positive infinity |
+| `nan` | Not-a-Number |
+
+---
+
+## Examples
+
+Below are **non-trivial examples** that demonstrate realistic usage.
+
+### Nested functions with power
+
+```text
+sin(pi / 4)^2 + cos(pi / 4)^2
+```
+
+### Combined logarithmic and exponential math
+
+```text
+log(exp(3) + sqrt(16)) / log(10)
+```
+
+### Deeply nested expression
+
+```text
+round(
+  (3 + sqrt(5))^2 / (2 * log(e + 1)),
+  5
+)
+```
+
+### Hyperbolic and trigonometric mix
+
+```text
+sinh(1) + cosh(1) - tan(pi / 6)^2
+```
+
+---
+
+## Invalid Expressions (Rejected)
+
+The following examples are **not allowed** and will be rejected:
+
+```text
+x + 1              # variables are not supported
+(1).__class__      # attribute access
+import math        # imports
+open("file.txt")   # I/O
+```
+
+--- 
+
+## Notes
+
+- All calculations use Python’s built-in floating-point behavior
+- Errors such as division by zero propagate naturally
+- The evaluator does not perform symbolic math; all expressions are numeric
+
+
 """
 
 TITLE = rf"""

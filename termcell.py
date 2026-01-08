@@ -1991,12 +1991,22 @@ class CSVEditor(App):
                 coord = type(self.current_cell)(row, col)
                 cell_value = self.thetable.get_cell_at(coord)
                 cell_value_str = str(cell_value).strip()
-                if cell_value_str.startswith('='):
+                if cell_value_str.startswith('=') and cell_value_str[1]!="(":
                     self.changed = True
                     new_value = funcstr.calculate_formula(self.thetable, cell_value_str)
                     self.thetable.update_cell_at(coord, new_value)
-
-
+        
+        for row in range(self.thetable.row_count):
+            for col in range(len(self.thetable.columns)):
+                coord = type(self.current_cell)(row, col)
+                cell_value = self.thetable.get_cell_at(coord)
+                cell_value_str = str(cell_value).strip()
+                if cell_value_str.startswith('=(') and cell_value_str.endswith(')'):
+                    # remove =( )
+                    tmp = cell_value_str[2:-1]
+                    self.changed = True
+                    new_value = funcstr.safe_math_eval(tmp)
+                    self.thetable.update_cell_at(coord, new_value)
 
     def enter_search_mode(self, direction: str) -> None:
         """Enter search mode."""
