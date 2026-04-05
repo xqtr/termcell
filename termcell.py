@@ -235,6 +235,7 @@ class CSVEditor(App):
     pending_goto_column: reactive[bool] = reactive(False)
     pending_column_insert_at_cursor: reactive[bool] = reactive(False)
     pending_width_reset: reactive[bool] = reactive(False)
+    pending_column_width: reactive[bool] = reactive(False)
     #pending_yes_no: reactive[bool] = reactive(False)
     clipboard_cell: reactive[str | None] = reactive(None)
     clipboard_row: reactive[list[str] | None] = reactive(None)
@@ -690,6 +691,8 @@ class CSVEditor(App):
                 "sl": lambda: setattr(self.thetable, "show_row_labels", not self.thetable.show_row_labels),
                 "sz": lambda: setattr(self.thetable, "zebra_stripes", not self.thetable.zebra_stripes),
                 "sc": lambda: setattr(self.thetable, "show_cursor", not self.thetable.show_cursor),
+                "sa": lambda: self.sort_current_column(ascending=True),
+                "sd": lambda: self.sort_current_column(ascending=False),
                 #"tt": lambda: self.action_open_theme_picker(),
                 "tt": lambda: self.action_toggle_theme(),
                 # copy/paste functions
@@ -702,6 +705,7 @@ class CSVEditor(App):
                 "gc": lambda: self.prompt_goto_column(),    # Go to column (prompt)
                 "wa": lambda: self.auto_width(),  # Auto width
                 "wr": lambda: self.prompt_reset_widths(),  # Reset widths
+                "wc": lambda: self.prompt_column_width(),
                 # Relative movements
                 "k": lambda: self.goto_cell(0, -count, True),   # Up
                 "j": lambda: self.goto_cell(0, count, True),    # Down
@@ -1093,6 +1097,208 @@ class CSVEditor(App):
                     self.set_status(f"Unknown option: {key}", temporary=True)
             else:
                 self.set_status(f"Invalid set syntax: {arg}", temporary=True)
+    
+    def _cmd_column_width(self, args: list[str]) -> None:
+        """Set width of current column."""
+        if not args:
+            self.set_status("Usage: :wc <width>", temporary=True)
+            return
+        
+        try:
+            width = int(args[0])
+            if width <= 0:
+                self.set_status("Width must be greater than 0", temporary=True)
+                return
+            
+            # Get current column
+            if not self.current_cell:
+                self.set_status("No current column selected", temporary=True)
+                return
+            
+            current_col = self.current_cell.column
+            
+            # Skip row number column
+            if current_col == 0:  # row number column
+                self.set_status("Cannot change width of row number column", temporary=True)
+                return
+            
+            # Get column key
+            col_keys = list(self.thetable.columns.keys())
+            if current_col >= len(col_keys):
+                self.set_status("Invalid column index", temporary=True)
+                return
+            
+            col_key = col_keys[current_col]
+            
+            # Store all data before changing width
+            column_keys = []
+            for col_key_obj in self.thetable.columns.keys():
+                column_keys.append(col_key_obj.value)
+            
+            # Store all row data
+            all_rows = []
+            for row_key in self.thetable.rows:
+                row_data = []
+                for col_key_temp in column_keys:
+                    row_data.append(self.thetable.get_cell(row_key, col_key_temp))
+                all_rows.append(row_data)
+            
+            # Store column labels
+            column_labels = {}
+            for col_key_temp in column_keys:
+                column_labels[col_key_temp] = self.thetable.columns[col_key_temp].label
+            
+            # Clear and rebuild table with updated width
+            cursor_pos = self.thetable.cursor_coordinate
+            self.thetable.clear(columns=True)
+            
+            # Re-add columns with updated width for current column
+            for idx, col_key_temp in enumerate(column_keys):
+                if idx == current_col:
+                    self.thetable.add_column(column_labels[col_key_temp], key=col_key_temp, width=width)
+                elif col_key_temp == "row_number":
+                    self.thetable.add_column(column_labels[col_key_temp], key=col_key_temp, width=self.number_column_width)
+                else:
+                    # Keep existing width for other columns
+                    current_width = self.thetable.columns.get(col_key_temp)
+                    if current_width and hasattr(current_width, 'width'):
+                        self.thetable.add_column(column_labels[col_key_temp], key=col_key_temp, width=current_width.width)
+                    else:
+                        self.thetable.add_column(column_labels[col_key_temp], key=col_key_temp)
+            
+            # Re-add all rows
+            for row_data in all_rows:
+                self.thetable.add_row(*row_data)
+            
+            # Restore cursor position
+            if cursor_pos and cursor_pos.row < self.thetable.row_count and cursor_pos.column < len(self.thetable.columns):
+                try:
+                    self.thetable.cursor_coordinate = cursor_pos
+                    self.current_cell = cursor_pos
+                except:
+                    self.thetable.cursor_coordinate = type(cursor_pos)(0, 0)
+                    self.current_cell = self.thetable.cursor_coordinate
+            
+            # Update input field
+            if self.current_cell:
+                value = self.thetable.get_cell_at(self.current_cell)
+                inp = self.query_one("#cell_input", Input)
+                inp.value = str(value)
+            
+            # Force refresh
+            self.thetable.refresh(layout=True)
+            
+            # Update status
+            self.update_status_with_coords()
+            
+            # Get column letter for display
+            col_letter = self.get_column_letter(current_col - 1) if current_col > 0 else "#"
+            self.set_status(f"Set column {col_letter} width to {width}")
+            
+        except ValueError:
+            self.set_status(f"Invalid width: {args[0]}", temporary=True)
+
+    def sort_current_column(self, ascending: bool = True) -> None:
+        """Sort table based on current column values."""
+        
+        if not self.thetable.row_count or not self.thetable.columns:
+            self.set_status("Table is empty", temporary=True)
+            return
+        
+        if not self.current_cell:
+            self.set_status("No current column selected", temporary=True)
+            return
+        
+        current_col = self.current_cell.column
+        
+        # Cannot sort by row number column
+        if current_col == 0:
+            self.set_status("Cannot sort by row number column", temporary=True)
+            return
+        
+        # Save cursor position
+        original_cursor = self.current_cell
+        
+        # Get all rows with their current column value
+        rows_with_values = []
+        
+        for row_idx in range(self.thetable.row_count):
+            cell_coord = type(self.current_cell)(row_idx, current_col)
+            cell_value = self.thetable.get_cell_at(cell_coord)
+            
+            # Convert to appropriate type for sorting
+            sort_value = self._get_sortable_value(cell_value)
+            
+            # Store row data
+            row_data = []
+            for col_idx in range(len(self.thetable.columns)):
+                col_coord = type(self.current_cell)(row_idx, col_idx)
+                row_data.append(self.thetable.get_cell_at(col_coord))
+            
+            rows_with_values.append((sort_value, row_data))
+        
+        # Sort rows
+        rows_with_values.sort(key=lambda x: (x[0][0], x[0][1]), reverse=not ascending)
+        
+        # Clear all rows
+        for row_key in list(self.thetable.rows.keys()):
+            self.thetable.remove_row(row_key)
+        
+        # Add sorted rows back with updated row numbers
+        for i, (_, row_data) in enumerate(rows_with_values, start=1):
+            # Update row number column (first column)
+            row_data[0] = str(i)
+            self.thetable.add_row(*row_data)
+        
+        self.changed = True
+        
+        # Move cursor to same column, first row
+        try:
+            self.thetable.cursor_coordinate = type(self.current_cell)(0, current_col)
+            self.current_cell = self.thetable.cursor_coordinate
+            
+            # Update input field
+            value = self.thetable.get_cell_at(self.current_cell)
+            inp = self.query_one("#cell_input", Input)
+            inp.value = str(value)
+        except:
+            pass
+        
+        # Update status
+        self.update_status_with_coords()
+        
+        # Get column letter for display
+        col_letter = self.get_column_letter(current_col - 1) if current_col > 0 else "#"
+        sort_type = "ascending" if ascending else "descending"
+        self.set_status(f"Sorted column {col_letter} in {sort_type} order ({self.thetable.row_count} rows)")
+
+    def _get_sortable_value(self, value) -> any:
+        """Convert cell value to sortable type with mixed-type handling."""
+        if value is None or value == "":
+            return (2, "")  # Put empty values at the end
+        
+        if isinstance(value, (int, float)):
+            return (0, value)  # Numbers come first, with their numeric value
+        
+        if isinstance(value, str):
+            stripped = value.strip()
+            
+            # Try numeric conversion
+            try:
+                # Check for integer
+                if '.' not in stripped:
+                    return (0, int(stripped))  # Numbers come first
+                else:
+                    return (0, float(stripped))  # Numbers come first
+            except ValueError:
+                pass
+            
+            # Return as string (type 1 means strings come after numbers)
+            return (1, stripped.lower())
+        
+        # Default fallback for other types
+        return (1, str(value))
+
 
     def _cmd_file_info(self, args: list[str]) -> None:
         """Show file information."""
@@ -1227,6 +1433,8 @@ class CSVEditor(App):
             'isupper': lambda self, args: self._cmd_string_transform(args, str.isupper),
             'lstrip': lambda self, args: self._cmd_string_transform(args, str.lstrip),
             
+            "wc": self._cmd_column_width,
+            
             # Help
             "h": self._cmd_help,
             "help": self._cmd_help,
@@ -1274,6 +1482,21 @@ class CSVEditor(App):
                 self.set_status(f"Command error: {str(e)}", temporary=True)
         else:
             self.set_status(f"Unknown command: {cmd_name}", temporary=True)
+    
+    def prompt_column_width(self) -> None:
+        """Prompt user for column width for current column."""
+        inp = self.query_one("#cell_input", Input)
+        inp.value = ""
+        
+        # Get current column letter for better UX
+        if self.current_cell and self.current_cell.column > 0:
+            col_letter = self.get_column_letter(self.current_cell.column - 1)
+            inp.placeholder = f"Enter width for column {col_letter} (current: ?)"
+        else:
+            inp.placeholder = "Enter width for current column"
+        
+        inp.focus()
+        self.pending_column_width = True
     
     def prompt_goto_row(self) -> None:
         """Prompt user for row number to go to."""
@@ -1856,6 +2079,22 @@ class CSVEditor(App):
             else:
                 # Use default width if input is empty
                 self.reset_widths()
+            self.thetable.focus()
+            return
+        
+        if hasattr(self, 'pending_column_width') and self.pending_column_width:
+            self.pending_column_width = False
+            if event.value.strip():
+                try:
+                    width = int(event.value.strip())
+                    if width > 0:
+                        self._cmd_column_width([event.value.strip()])
+                    else:
+                        self.set_status("Width must be greater than 0", temporary=True)
+                except ValueError:
+                    self.set_status(f"Invalid width: {event.value}", temporary=True)
+            else:
+                self.set_status("Width cannot be empty", temporary=True)
             self.thetable.focus()
             return
 

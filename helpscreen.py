@@ -82,6 +82,16 @@ Press `.` (period) to repeat last command
 
 ---
 
+## Data
+
+### Sort Column
+| Keys | Action |
+|------|--------|
+| `sa`  | Sort Asceding |
+| `sd`  | Sort Descending |
+
+---
+
 ## Navigation
 
 ### Basic Movement
@@ -166,6 +176,7 @@ Press `.` (period) to repeat last command
 | `sc` | Toggle cursor visibility |
 | `wa` | Auto-adjust column widths |
 | `wr` | Reset all column widths |
+| `wc` | Set column width |
 | `fr` / `fc` | Set fixed rows/columns |
 
 ### Themes
